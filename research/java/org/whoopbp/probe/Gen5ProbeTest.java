@@ -35,6 +35,9 @@ public final class Gen5ProbeTest {
         forbidden(Gen5Probe.RAW_START,new byte[]{1});forbidden(Gen5Probe.RAW_START,new byte[]{2,0,0,0,0});
         check(Gen5Probe.command(1,Gen5Probe.RAW_START,Gen5Probe.rawBody(45000)).length==20,"bounded rev2 raw command");
         check(Gen5Probe.command(2,Gen5Probe.HELLO,new byte[]{1})[10]==(byte)0x91,"hello wire opcode");
+        check(Gen5Probe.command(3,Gen5Probe.OPTICAL_LIVE,new byte[]{1,1})[10]==0x6c,"gen5 optical live is 108");
+        check(Gen5Probe.command(4,Gen5Probe.OPTICAL_LIVE,new byte[]{1,0})[12]==0,"optical OFF is available");
+        forbidden(0x6b,new byte[]{1,1});forbidden(Gen5Probe.OPTICAL_LIVE,new byte[]{1,2});
         check(!stats.report().toString().contains("1780917232"),"report excludes absolute record timestamps");
         System.out.println("PASS "+checks+" protocol/fragmentation/saturation/safety checks");
     }

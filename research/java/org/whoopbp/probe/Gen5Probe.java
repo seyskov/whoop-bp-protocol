@@ -17,7 +17,7 @@ public final class Gen5Probe {
         "fd4b0005-cce1-4033-93ce-002d5875f58a"
     };
     public static final int HELLO=0x91, CLOCK=0x0b, RANGE=0x22,
-        FLAG=0x80, HISTORY=0x16, ABORT=0x14, RAW_START=0x51, RAW_STOP=0x52;
+        FLAG=0x80, HISTORY=0x16, ABORT=0x14, RAW_START=0x51, RAW_STOP=0x52, OPTICAL_LIVE=0x6c;
     public static final List<String> FLAGS = Collections.unmodifiableList(Arrays.asList(
         "enable_r22_packets", "enable_r22_v2_packets", "enable_r22_v3_packets",
         "enable_r22_v4_packets", "enable_r22_v5_packets", "enable_r22_v6_packets",
@@ -36,6 +36,12 @@ public final class Gen5Probe {
                 if (body.length!=0) throw new IllegalArgumentException("empty body required"); break;
             case ABORT: if(body.length!=1 || body[0]!=0) throw new IllegalArgumentException("abort"); break;
             case RAW_STOP: if(body.length!=1 || body[0]!=1) throw new IllegalArgumentException("stop"); break;
+            case OPTICAL_LIVE:
+                // Existing gen5 TOGGLE_OPTICAL_MODE, not 0x6B save-to-history
+                // or 0x99 persistent optical save. UI pairs ON/OFF with a
+                // bounded rev-2 RAW session; samples remain RAM-only.
+                if(body.length!=2 || body[0]!=1 || (body[1]!=0 && body[1]!=1))throw new IllegalArgumentException("optical toggle");
+                break;
             case RAW_START:
                 if(body.length!=5 || body[0]!=2 || u32(body,1)<1 || u32(body,1)>60000)
                     throw new IllegalArgumentException("raw must be revision 2 and <=60s");
