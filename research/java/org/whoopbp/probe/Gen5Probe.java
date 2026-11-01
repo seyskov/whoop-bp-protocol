@@ -1,6 +1,5 @@
 package org.whoopbp.probe;
 
-import java.io.ByteArrayOutputStream;
 import java.util.*;
 import java.util.zip.CRC32;
 
@@ -108,6 +107,7 @@ public final class Gen5Probe {
 
     /** Shape/availability counters only. No raw waves, vitals, serials, or absolute dates in report. */
     public static final class Stats {
+        public final WaveAudit waveAudit=new WaveAudit();
         public final Map<String,Integer> packetTypes=new TreeMap<>(), historicalVersions=new TreeMap<>(),
             liveRecordCandidates=new TreeMap<>(), declaredPpgRates=new TreeMap<>(), opticalRates=new TreeMap<>();
         public final Set<Long> seenPpg=new HashSet<>(), seenOptical=new HashSet<>();
@@ -118,6 +118,8 @@ public final class Gen5Probe {
         public final Set<String> opticalConfigs=new HashSet<>();
         public String firmware=null;
         public boolean helloSucceeded, sawHistoryEnd;
+        public Boolean helloWorn=null;
+        public int helloObservations;
         public int rawStartStatus=-1, rawStopStatus=-1;
         static void count(Map<String,Integer> m,String k){m.put(k,m.getOrDefault(k,0)+1);}
         public void accept(byte[] in){
@@ -130,11 +132,13 @@ public final class Gen5Probe {
                 if(op==HELLO && status==1 && in.length>=109){
                     helloSucceeded=true;int b=5;
                     firmware=(in[b+91]&255)+"."+(in[b+92]&255)+"."+(in[b+93]&255)+"."+u32(in,b+94);
+                    int worn=in[b+102]&255;helloWorn=worn==0?Boolean.FALSE:(worn==1?Boolean.TRUE:null);helloObservations++;
                 }
             }
             if(type==0x2b && in.length>1)count(liveRecordCandidates,Integer.toString(in[1]&255));
             // A live wrapper is never silently decoded as historical data.
             if(type!=0x2f || in.length<13)return;
+            waveAudit.accept(in);
             historicalFrames++;int v=in[1]&255;
             count(historicalVersions,Integer.toString(v));
             if(v==18 || v==20 || v==21 || v==26)count(declaredPpgRates,(in[2]&128)!=0?"25":"50");
@@ -178,6 +182,7 @@ public final class Gen5Probe {
             Map<String,Object> r=new LinkedHashMap<>();r.put("schema",1);r.put("blood_pressure_estimation_validated",false);
             r.put("raw_samples_persisted",false);r.put("persistent_config_writes",0);r.put("history_trim_acks",0);
             r.put("hello_succeeded",helloSucceeded);r.put("firmware",firmware);r.put("valid_frames",validFrames);
+            r.put("last_hello_worn",helloWorn);r.put("hello_observations",helloObservations);r.put("waveform_audit",waveAudit.summary());
             r.put("packet_types",packetTypes);r.put("historical_versions",historicalVersions);
             r.put("live_record_candidates_not_decoded",liveRecordCandidates);r.put("declared_ppg_rate_flags_hz",declaredPpgRates);
             r.put("raw_start_status",rawStartStatus);r.put("raw_stop_status",rawStopStatus);
