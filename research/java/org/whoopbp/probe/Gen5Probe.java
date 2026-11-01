@@ -17,7 +17,7 @@ public final class Gen5Probe {
         "fd4b0005-cce1-4033-93ce-002d5875f58a"
     };
     public static final int HELLO=0x91, CLOCK=0x0b, RANGE=0x22,
-        FLAG=0x80, HISTORY=0x16, ABORT=0x14, RAW_START=0x51, RAW_STOP=0x52, OPTICAL_LIVE=0x6c;
+        FLAG=0x80, HISTORY=0x16, ABORT=0x14, RAW_START=0x51, RAW_STOP=0x52, OPTICAL_LIVE=0x6c, REALTIME_HR=0x03;
     public static final List<String> FLAGS = Collections.unmodifiableList(Arrays.asList(
         "enable_r22_packets", "enable_r22_v2_packets", "enable_r22_v3_packets",
         "enable_r22_v4_packets", "enable_r22_v5_packets", "enable_r22_v6_packets",
@@ -42,6 +42,8 @@ public final class Gen5Probe {
                 // bounded rev-2 RAW session; samples remain RAM-only.
                 if(body.length!=2 || body[0]!=1 || (body[1]!=0 && body[1]!=1))throw new IllegalArgumentException("optical toggle");
                 break;
+            case REALTIME_HR:
+                if(body.length!=1 || (body[0]!=0 && body[0]!=1))throw new IllegalArgumentException("HR toggle");break;
             case RAW_START:
                 if(body.length!=5 || body[0]!=2 || u32(body,1)<1 || u32(body,1)>60000)
                     throw new IllegalArgumentException("raw must be revision 2 and <=60s");
@@ -114,6 +116,8 @@ public final class Gen5Probe {
     /** Shape/availability counters only. No raw waves, vitals, serials, or absolute dates in report. */
     public static final class Stats {
         public final WaveAudit waveAudit=new WaveAudit();
+        public LiveOpticalAudit liveAudit=new LiveOpticalAudit();
+        public final Map<String,Integer> commandStatuses=new TreeMap<>(),commandResponseCounts=new TreeMap<>();
         public final Map<String,Integer> packetTypes=new TreeMap<>(), historicalVersions=new TreeMap<>(),
             liveRecordCandidates=new TreeMap<>(), declaredPpgRates=new TreeMap<>(), opticalRates=new TreeMap<>();
         public final Set<Long> seenPpg=new HashSet<>(), seenOptical=new HashSet<>();
@@ -129,10 +133,15 @@ public final class Gen5Probe {
         public int rawStartStatus=-1, rawStopStatus=-1;
         static void count(Map<String,Integer> m,String k){m.put(k,m.getOrDefault(k,0)+1);}
         public void accept(byte[] in){
+            accept(in,-1);
+        }
+        public void accept(byte[] in,long receiveNs){
             if(in.length==0)return;validFrames++;int type=in[0]&255;
+            liveAudit.accept(in,receiveNs);
             count(packetTypes,String.format(Locale.ROOT,"0x%02x",type));
             if(type==0x24 && in.length>=5){
                 int op=in[2]&255,status=in[4]&255;
+                String key=String.format(Locale.ROOT,"0x%02x",op);commandStatuses.put(key,status);count(commandResponseCounts,key);
                 if(op==RAW_START)rawStartStatus=status;if(op==RAW_STOP)rawStopStatus=status;
                 // Successful gen5 hello has a 104-byte body after the 5-byte header.
                 if(op==HELLO && status==1 && in.length>=109){
@@ -189,6 +198,8 @@ public final class Gen5Probe {
             r.put("raw_samples_persisted",false);r.put("persistent_config_writes",0);r.put("history_trim_acks",0);
             r.put("hello_succeeded",helloSucceeded);r.put("firmware",firmware);r.put("valid_frames",validFrames);
             r.put("last_hello_worn",helloWorn);r.put("hello_observations",helloObservations);r.put("waveform_audit",waveAudit.summary());
+            r.put("live_optical_integrity",liveAudit.progress());
+            r.put("command_statuses",commandStatuses);r.put("command_response_counts",commandResponseCounts);
             r.put("packet_types",packetTypes);r.put("historical_versions",historicalVersions);
             r.put("live_record_candidates_not_decoded",liveRecordCandidates);r.put("declared_ppg_rate_flags_hz",declaredPpgRates);
             r.put("raw_start_status",rawStartStatus);r.put("raw_stop_status",rawStopStatus);
